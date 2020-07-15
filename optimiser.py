@@ -1,5 +1,7 @@
 import numpy
 
+import copy
+
 import matplotlib
 
 matplotlib.use('Agg')
@@ -35,16 +37,16 @@ class ADAM:
 
 
 def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='adam',
-                     lr=1e-3, batch_size=None, val_size=None, val_skip=0, tol=8, factr=1e-3, max_batch=int(4096),
+                     lr=1e-3, batch_size=None, val_size=None, val_skip=0, tol=8, factr=1e-3, max_batch=int(1e4),
                      plot_loss=True, print_info=True, plot_final_loss=True):
 
     batch_L = []
 
     gap = []
 
-    theta = theta_0.copy()
+    theta = copy.deepcopy(theta_0)
 
-    fin_theta = theta_0.copy()
+    fin_theta = copy.deepcopy(theta_0)
 
     n_data = numpy.shape(data)[0]
 
@@ -69,7 +71,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
         if batch_size is not None:
             batch_idx = numpy.random.choice(numpy.arange(0, n_data), batch_size, replace=False)
 
-        L_t, g_t = obj_g(theta, extra_args, data[batch_idx, :])
+        L_t, g_t = obj_g(theta, data[batch_idx, :], extra_args)
 
         theta = optimiser.update(theta, g_t)
 
@@ -77,13 +79,13 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
             if numpy.mod(i, numpy.min([numpy.floor(tol / 2), (1 + val_skip)])) == 0:
 
-                L_t = obj(theta, extra_args, data[val_idx, :])
+                L_t = obj(theta,  data[val_idx, :], extra_args)
 
         batch_L.append(L_t)
 
         if len(batch_L) >= 2:
             if batch_L[-1] < numpy.min(batch_L[:-1]):
-                fin_theta = theta.copy()
+                fin_theta = copy.deepcopy(theta)
 
         if (numpy.mod(len(batch_L), tol) == 0) & plot_loss:
 
@@ -101,7 +103,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             matplotlib.pyplot.grid(True)
 
             try:
-                fig.savefig('./losses.png', bbox_inches='tight')
+                fig.savefig('./' + str(lr) + '.png', bbox_inches='tight')
             except PermissionError:
                 pass
             except OSError:
