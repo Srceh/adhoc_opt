@@ -8,6 +8,8 @@ matplotlib.use('Agg')
 
 import matplotlib.pyplot
 
+import datetime
+
 
 class ADAM:
 
@@ -27,11 +29,13 @@ class ADAM:
 
     def update(self, theta, g_t):
 
-        self.m = self.beta_1 * self.m + (1 - self.beta_1) * g_t
+        if numpy.sum(numpy.isfinite(g_t)) == len(g_t):
 
-        self.v = self.beta_2 * self.v + (1 - self.beta_2) * g_t * g_t
+            self.m = self.beta_1 * self.m + (1 - self.beta_1) * g_t
 
-        theta = theta - self.lr * self.m / (self.v ** 0.5 + self.eps)
+            self.v = self.beta_2 * self.v + (1 - self.beta_2) * g_t * g_t
+
+            theta = theta - self.lr * self.m / (self.v ** 0.5 + self.eps)
 
         return theta
 
@@ -80,6 +84,10 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             if numpy.mod(i, numpy.min([numpy.floor(tol / 2), (1 + val_skip)])) == 0:
 
                 L_t = obj(theta,  data[val_idx, :], extra_args)
+
+            else:
+
+                L_t = copy.deepcopy(batch_L[-1])
 
         batch_L.append(L_t)
 
@@ -155,7 +163,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
         matplotlib.pyplot.grid(True)
 
         try:
-            fig.savefig('./losses.png', bbox_inches='tight')
+            fig.savefig('./' + str(lr) + '.png', bbox_inches='tight')
         except PermissionError:
             pass
         except OSError:
