@@ -23,9 +23,9 @@ class ADAM:
 
         self.eps = eps
 
-        self.m = numpy.zeros(len(theta))
+        self.m = numpy.zeros(numpy.shape(theta))
 
-        self.v = numpy.zeros(len(theta))
+        self.v = numpy.zeros(numpy.shape(theta))
 
     def update(self, theta, g_t):
 
