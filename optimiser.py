@@ -44,6 +44,8 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
                      lr=1e-3, batch_size=None, val_size=None, val_skip=0, tol=8, factr=1e-3, max_batch=int(1e4),
                      plot_loss=True, print_info=True, plot_final_loss=True):
 
+    start_time = datetime.datetime.now()
+    
     batch_L = []
 
     gap = []
@@ -111,7 +113,8 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             matplotlib.pyplot.grid(True)
 
             try:
-                fig.savefig('./' + str(lr) + '.png', bbox_inches='tight')
+                fig.savefig('./' + str(lr) + '_' + str(numpy.shape(data)[0]) + '_' 
+                            + str(start_time).replace(':', '-') + '.png', bbox_inches='tight')
             except PermissionError:
                 pass
             except OSError:
@@ -163,7 +166,8 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
         matplotlib.pyplot.grid(True)
 
         try:
-            fig.savefig('./' + str(lr) + '.png', bbox_inches='tight')
+            fig.savefig('./' + str(lr) + '_' + str(numpy.shape(data)[0]) + '_' 
+                        + str(start_time).replace(':', '-') + '.png', bbox_inches='tight')
         except PermissionError:
             pass
         except OSError:
