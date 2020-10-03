@@ -46,6 +46,8 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
     start_time = datetime.datetime.now()
     
+    raw_batch_L = []
+    
     batch_L = []
 
     gap = []
@@ -90,27 +92,39 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             else:
 
                 L_t = copy.deepcopy(batch_L[-1])
-
-        batch_L.append(L_t)
+                
+        raw_batch_L.append(L_t)
+                
+        if len(raw_batch_L) > tol:
+            batch_L.append(numpy.mean(numpy.array(raw_batch_L)[-tol:]))
 
         if len(batch_L) >= 2:
             if batch_L[-1] < numpy.min(batch_L[:-1]):
                 fin_theta = copy.deepcopy(theta)
 
-        if (numpy.mod(len(batch_L), tol) == 0) & plot_loss:
+        if (numpy.mod(len(batch_L), tol) == 0) & plot_loss & (len(batch_L) >= tol):
 
-            fig = matplotlib.pyplot.figure(figsize=(16, 9))
+            fig, axlist = matplotlib.pyplot.subplots(nrows=1, ncols=2, dpi=128, figsize=(21, 9))
 
-            matplotlib.pyplot.plot(numpy.arange(0, len(batch_L)),
-                                   numpy.array(batch_L))
+            axlist[0].plot(numpy.arange(0, len(batch_L)), numpy.array(batch_L))
 
-            matplotlib.pyplot.xlabel('Batches')
+            axlist[0].set_xlabel('Batches')
 
-            matplotlib.pyplot.ylabel('Loss')
+            axlist[0].set_ylabel('Loss')
 
-            matplotlib.pyplot.title('Learning Rate: ' + str(lr))
+            axlist[0].set_title('Learning Rate: ' + str(lr))
 
-            matplotlib.pyplot.grid(True)
+            axlist[0].grid(True)
+        
+            axlist[1].plot(numpy.arange(0, len(batch_L))[-tol:], numpy.array(batch_L)[-tol:])
+
+            axlist[1].set_xlabel('Batches')
+
+            axlist[1].set_ylabel('Loss')
+
+            axlist[1].set_title('Learning Rate: ' + str(lr))
+
+            axlist[1].grid(True)
 
             try:
                 fig.savefig('./' + str(lr) + '_' + str(numpy.shape(data)[0]) + '_' 
@@ -152,18 +166,27 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
     if plot_final_loss:
 
-        fig = matplotlib.pyplot.figure(figsize=(16, 9))
+        fig, axlist = matplotlib.pyplot.subplots(nrows=1, ncols=2, dpi=128, figsize=(21, 9))
+        
+        axlist[0].plot(numpy.arange(0, len(batch_L)), numpy.array(batch_L))
 
-        matplotlib.pyplot.plot(numpy.arange(0, len(batch_L)),
-                               numpy.array(batch_L))
+        axlist[0].set_xlabel('Batches')
 
-        matplotlib.pyplot.xlabel('Batches')
+        axlist[0].set_ylabel('Loss')
 
-        matplotlib.pyplot.ylabel('Loss')
+        axlist[0].set_title('Learning Rate: ' + str(lr))
 
-        matplotlib.pyplot.title('Learning Rate: ' + str(lr))
+        axlist[0].grid(True)
+        
+        axlist[1].plot(numpy.arange(0, len(batch_L))[-tol:], numpy.array(batch_L)[-tol:])
 
-        matplotlib.pyplot.grid(True)
+        axlist[1].set_xlabel('Batches')
+
+        axlist[1].set_ylabel('Loss')
+
+        axlist[1].set_title('Learning Rate: ' + str(lr))
+
+        axlist[1].grid(True)
 
         try:
             fig.savefig('./' + str(lr) + '_' + str(numpy.shape(data)[0]) + '_' 
