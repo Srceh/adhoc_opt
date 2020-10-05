@@ -42,7 +42,7 @@ class ADAM:
 
 def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='adam',
                      lr=1e-3, batch_size=None, val_size=None, val_skip=0, tol=8, factr=1e-3, max_batch=int(1e4),
-                     plot_loss=True, print_info=True, plot_final_loss=True):
+                     plot_loss=True, print_info=True, plot_final_loss=True, print_iteration=True):
 
     start_time = datetime.datetime.now()
     
@@ -92,6 +92,9 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             else:
 
                 L_t = copy.deepcopy(batch_L[-1])
+        
+        if print_iteration:        
+            print('Batch: ' + str(i) + ', L_t: ' + str(L_t))
                 
         raw_batch_L.append(L_t)
                 
