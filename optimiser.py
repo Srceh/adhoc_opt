@@ -138,6 +138,14 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
                 pass
 
             matplotlib.pyplot.close(fig)
+            
+            try:
+                numpy.savetxt(fname='./' + str(lr) + '_' + str(numpy.shape(data)[0]) + '_' + 
+                                                str(start_time).replace(':', '-') + '.csv', X=fin_theta, delimiter=',')
+            except PermissionError:
+                pass
+            except OSError:
+                pass
 
         if len(batch_L) > tol:
             previous_opt = numpy.min(batch_L.copy()[:-tol])
