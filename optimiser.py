@@ -91,7 +91,13 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
             else:
 
-                L_t = copy.deepcopy(batch_L[-1])
+                L_t = copy.deepcopy(raw_batch_L[-1])
+
+        if numpy.isfinite(L_t.numpy()):
+            L_t = L_t.numpy()
+        else:
+            theta = copy.deepcopy(fin_theta)
+            L_t = copy.deepcopy(raw_batch_L[-1])
         
         if print_iteration:        
             print('Batch: ' + str(i) + ', L_t: ' + str(L_t))
