@@ -28,14 +28,17 @@ class ADAM:
         self.v = numpy.zeros(numpy.shape(theta))
 
     def update(self, theta, g_t):
-
-        if numpy.sum(numpy.isfinite(g_t)) == len(g_t):
+        
+        if numpy.sum(~numpy.isfinite(g_t)) == 0:
 
             self.m = self.beta_1 * self.m + (1 - self.beta_1) * g_t
 
             self.v = self.beta_2 * self.v + (1 - self.beta_2) * g_t * g_t
 
             theta = theta - self.lr * self.m / (self.v ** 0.5 + self.eps)
+            
+        else:
+            raise RuntimeError('nan in gradient')
 
         return theta
 
@@ -96,8 +99,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
         if numpy.isfinite(L_t.numpy()):
             L_t = L_t.numpy()
         else:
-            theta = copy.deepcopy(fin_theta)
-            L_t = copy.deepcopy(raw_batch_L[-1])
+            raise RuntimeError('nan in Loss')
         
         if print_iteration:        
             print('Batch: ' + str(i) + ', L_t: ' + str(L_t))
