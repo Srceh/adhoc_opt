@@ -1,3 +1,4 @@
+from typing_extensions import runtime
 import numpy
 
 import copy
@@ -44,14 +45,16 @@ class ADAM:
 
 
 def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='adam',
-                     lr=1e-3, batch_size=None, val_size=None, val_skip=0, tol=8, factr=1e-3, max_batch=int(1e4),
-                     plot_loss=True, print_info=True, plot_final_loss=True, print_iteration=True):
+                     lr=1e-3, batch_size=32, val_size=None, val_skip=0, tol_r=10, plot_tol_r=1,
+                     factr=1e-3, max_batch_r=None,
+                     ref='tmp_mdl',
+                     plot_loss=False, print_info=True, plot_final_loss=False, print_iteration=False):
 
     start_time = datetime.datetime.now()
     
     raw_batch_L = []
     
-    batch_L = []
+    epoch_L = []
 
     gap = []
 
@@ -60,13 +63,21 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
     fin_theta = copy.deepcopy(theta_0)
 
     n_data = numpy.shape(data)[0]
+    
+    epoch_size = int(numpy.ceil(n_data / batch_size)) 
+    
+    tol = int(epoch_size * tol_r)
+        
+    plot_tol = int(epoch_size * plot_tol_r)
+        
+    max_batch = int(numpy.ceil(n_data / batch_size) * max_batch_r)
 
     if val_size is not None:
         if val_size >= n_data:
             val_size = n_data
             val_idx = numpy.arange(0, n_data)
         else:
-            val_idx = numpy.random.choice(numpy.arange(0, n_data), val_size, replace=False)
+            val_idx = numpy.random.choice(numpy.arange(0, n_data), val_size, replace=True)
     else:
         val_size = None
 
@@ -80,7 +91,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
     for i in range(0, max_batch):
 
         if batch_size is not None:
-            batch_idx = numpy.random.choice(numpy.arange(0, n_data), batch_size, replace=False)
+            batch_idx = numpy.random.choice(numpy.arange(0, n_data), batch_size, replace=True)
 
         L_t, g_t = obj_g(theta, data[batch_idx, :], extra_args)
 
@@ -106,18 +117,18 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
                 
         raw_batch_L.append(L_t)
                 
-        if len(raw_batch_L) > tol:
-            batch_L.append(numpy.mean(numpy.array(raw_batch_L)[-tol:]))
+        if len(raw_batch_L) > epoch_size:
+            epoch_L.append(numpy.mean(numpy.array(raw_batch_L)[-epoch_size:]))
 
-        if len(batch_L) >= 2:
-            if batch_L[-1] < numpy.min(batch_L[:-1]):
+        if len(epoch_L) >= 2:
+            if epoch_L[-1] < numpy.min(epoch_L[:-1]):
                 fin_theta = copy.deepcopy(theta)
 
-        if (numpy.mod(len(batch_L), tol) == 0) & plot_loss & (len(batch_L) >= tol):
+        if (numpy.mod(len(epoch_L), plot_tol) == 0) & plot_loss & (len(epoch_L) >= plot_tol):
 
             fig, axlist = matplotlib.pyplot.subplots(nrows=1, ncols=2, dpi=128, figsize=(21, 9))
 
-            axlist[0].plot(numpy.arange(0, len(batch_L)), numpy.array(batch_L))
+            axlist[0].plot(numpy.arange(0, len(epoch_L)), numpy.array(epoch_L))
 
             axlist[0].set_xlabel('Batches')
 
@@ -127,7 +138,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
             axlist[0].grid(True)
         
-            axlist[1].plot(numpy.arange(0, len(batch_L))[-tol:], numpy.array(batch_L)[-tol:])
+            axlist[1].plot(numpy.arange(0, len(epoch_L))[-plot_tol:], numpy.array(epoch_L)[-plot_tol:])
 
             axlist[1].set_xlabel('Batches')
 
@@ -138,7 +149,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             axlist[1].grid(True)
 
             try:
-                fig.savefig('./' + str(lr) + '_' + str(numpy.shape(data)[0]) + '_' 
+                fig.savefig('./' + ref + str(lr) + '_' + str(numpy.shape(data)[0]) + '_' 
                             + str(start_time).replace(':', '-') + '.png', bbox_inches='tight')
             except PermissionError:
                 pass
@@ -148,46 +159,47 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             matplotlib.pyplot.close(fig)
             
             try:
-                numpy.savetxt(fname='./' + str(lr) + '_' + str(numpy.shape(data)[0]) + '_' + 
+                numpy.savetxt(fname='./' + ref + str(lr) + '_' + str(numpy.shape(data)[0]) + '_' + 
                                                 str(start_time).replace(':', '-') + '.csv', X=fin_theta, delimiter=',')
             except PermissionError:
                 pass
             except OSError:
                 pass
+            
+        if (numpy.mod(len(epoch_L), plot_tol) == 0) & print_info & (len(epoch_L) > 0):
+            print('=============================================================================')
+            
+            print('epoch: ' + str(int(len(epoch_L) / epoch_size)) + ', optimiser: ' + optimiser_choice + ', Loss: ' + str(epoch_L[-1]))
+            
+            tmp_time = datetime.datetime.now()
+            
+            print('Progress:' + "{:.2f}".format(len(raw_batch_L) / max_batch * 100) + '%')
+            print('Running Time: ' + str(((tmp_time - start_time))))    
+            print('Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L))))
 
-        if len(batch_L) > tol:
-            previous_opt = numpy.min(batch_L.copy()[:-tol])
+            print('=============================================================================')
 
-            current_opt = numpy.min(batch_L.copy()[-tol:])
+        if len(epoch_L) > tol:
+            previous_opt = numpy.min(epoch_L.copy()[:-tol])
+
+            current_opt = numpy.min(epoch_L.copy()[-tol:])
 
             gap.append(previous_opt - current_opt)
 
-            if (numpy.mod(len(batch_L), tol) == 0) & print_info:
-                print('=============================================================================')
-
-                print('Batch: ' + str(len(batch_L)) + ', optimiser: ' + optimiser_choice + ', Loss: ' + str(L_t))
-
-                print('Previous And Recent Top Averaged Loss Is:')
-                print(numpy.hstack([previous_opt, current_opt]))
-
-                print('Current Improvement, Initial Improvement * factr')
-                print(numpy.hstack([gap[-1], gap[0] * factr]))
-
-                print('=============================================================================')
-
             if (len(gap) >= 2) & (gap[-1] <= (gap[0] * factr)):
-                print('Total batch number: ' + str(len(batch_L)))
-                print('Initial Loss: ' + str(batch_L[0]))
-                print('Final Loss: ' + str(numpy.min(batch_L)))
-                print('Current Improvement, Initial Improvement * factr')
-                print(numpy.hstack([gap[-1], gap[0] * factr]))
                 break
+
+    print('Total epoch number: ' + str(int((len(epoch_L) / epoch_size))))
+    print('Initial Loss: ' + str(epoch_L[0]))
+    print('Final Loss: ' + str(numpy.min(epoch_L)))
+    print('Current Improvement, Initial Improvement * factr')
+    print(numpy.hstack([gap[-1], gap[0] * factr]))
 
     if plot_final_loss:
 
         fig, axlist = matplotlib.pyplot.subplots(nrows=1, ncols=2, dpi=128, figsize=(21, 9))
         
-        axlist[0].plot(numpy.arange(0, len(batch_L)), numpy.array(batch_L))
+        axlist[0].plot(numpy.arange(0, len(epoch_L)), numpy.array(epoch_L))
 
         axlist[0].set_xlabel('Batches')
 
@@ -197,7 +209,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
         axlist[0].grid(True)
         
-        axlist[1].plot(numpy.arange(0, len(batch_L))[-tol:], numpy.array(batch_L)[-tol:])
+        axlist[1].plot(numpy.arange(0, len(epoch_L))[-tol:], numpy.array(epoch_L)[-tol:])
 
         axlist[1].set_xlabel('Batches')
 
@@ -208,7 +220,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
         axlist[1].grid(True)
 
         try:
-            fig.savefig('./' + str(lr) + '_' + str(numpy.shape(data)[0]) + '_' 
+            fig.savefig('./' + ref + str(lr) + '_' + str(numpy.shape(data)[0]) + '_' 
                         + str(start_time).replace(':', '-') + '.png', bbox_inches='tight')
         except PermissionError:
             pass
