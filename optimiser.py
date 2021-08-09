@@ -175,7 +175,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             
             print('Progress:' + "{:.2f}".format(len(raw_batch_L) / max_batch * 100) + '%')
             print('Running Time: ' + str(((tmp_time - start_time))))    
-            print('Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L))))
+            print('Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1)))
 
             print('=============================================================================')
 
