@@ -48,7 +48,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
                      lr=1e-3, batch_size=32, val_size=None, val_skip=0, tol_r=10, plot_tol_r=1,
                      factr=1e-3, max_batch_r=None,
                      ref='tmp_mdl',
-                     plot_loss=False, print_info=True, plot_final_loss=False, print_iteration=False):
+                     plot_loss=False, print_info=True, plot_final_loss=False, print_iteration=False, print_final_info=True):
 
     start_time = datetime.datetime.now()
     
@@ -188,12 +188,13 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
             if (len(gap) >= 2) & (gap[-1] <= (gap[0] * factr)):
                 break
-
-    print('Total epoch number: ' + str(int((len(epoch_L) / epoch_size))))
-    print('Initial Loss: ' + str(epoch_L[0]))
-    print('Final Loss: ' + str(numpy.min(epoch_L)))
-    print('Current Improvement, Initial Improvement * factr')
-    print(numpy.hstack([gap[-1], gap[0] * factr]))
+            
+    if print_final_info:
+        print('Total epoch number: ' + str(int((len(epoch_L) / epoch_size))))
+        print('Initial Loss: ' + str(epoch_L[0]))
+        print('Final Loss: ' + str(numpy.min(epoch_L)))
+        print('Current Improvement, Initial Improvement * factr')
+        print(numpy.hstack([gap[-1], gap[0] * factr]))
 
     if plot_final_loss:
 
