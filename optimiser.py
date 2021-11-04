@@ -166,19 +166,6 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             except OSError:
                 pass
             
-        if (numpy.mod(len(epoch_L), plot_tol) == 0) & print_info & (len(epoch_L) > 0):
-            print('=============================================================================')
-            
-            print('epoch: ' + str(int(len(epoch_L) / epoch_size)) + ', optimiser: ' + optimiser_choice + ', Loss: ' + str(epoch_L[-1]))
-            
-            tmp_time = datetime.datetime.now()
-            
-            print('Progress:' + "{:.2f}".format(len(raw_batch_L) / max_batch * 100) + '%')
-            print('Running Time: ' + str(((tmp_time - start_time))))    
-            print('Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1)))
-
-            print('=============================================================================')
-
         if len(epoch_L) > tol:
             previous_opt = numpy.min(epoch_L.copy()[:-tol])
 
@@ -189,8 +176,27 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             if (len(gap) >= 2) & (gap[-1] <= (gap[0] * factr)):
                 break
             
+        if print_info & (len(epoch_L) > 0):
+            
+            tmp_time = datetime.datetime.now()
+            
+            if len(epoch_L) <= tol:
+            
+                print('\rEpoch: ' + str(int(len(epoch_L) / epoch_size)) + ', Optimiser: ' + optimiser_choice + ', Loss: ' + str(epoch_L[-1]) + 
+                    ', Progress:' + "{:.2f}".format(len(raw_batch_L) / max_batch * 100) + '%' + 
+                    ', Running Time: ' + str(((tmp_time - start_time))) + 
+                    ', Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1)), end='')
+            else:
+                print('\rEpoch: ' + str(int(len(epoch_L) / epoch_size)) + ', Optimiser: ' + optimiser_choice + ', Loss: ' + str(epoch_L[-1]) + 
+                    ', Progress:' + "{:.2f}".format(len(raw_batch_L) / max_batch * 100) + '%' + 
+                    ', Previous Avg.Loss:' + str(previous_opt) +
+                    ', Current Avg.Loss:' + str(current_opt) +
+                    ', Improvement: ' + str(gap[-1]) + ', Threshold: ', str(gap[0] * factr) +
+                    ', Running Time: ' + str(((tmp_time - start_time))) + 
+                    ', Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1)), end='')       
+            
     if print_final_info:
-        print('Total epoch number: ' + str(int((len(epoch_L) / epoch_size))))
+        print('\nTotal epoch number: ' + str(int((len(epoch_L) / epoch_size))))
         print('Initial Loss: ' + str(epoch_L[0]))
         print('Final Loss: ' + str(numpy.min(epoch_L)))
         print('Current Improvement, Initial Improvement * factr')
