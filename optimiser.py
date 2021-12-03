@@ -1,4 +1,5 @@
 from typing_extensions import runtime
+
 import numpy
 
 import copy
@@ -29,17 +30,12 @@ class ADAM:
         self.v = numpy.zeros(numpy.shape(theta))
 
     def update(self, theta, g_t):
-        
-        if numpy.sum(~numpy.isfinite(g_t)) == 0:
 
-            self.m = self.beta_1 * self.m + (1 - self.beta_1) * g_t
+        self.m = self.beta_1 * self.m + (1 - self.beta_1) * g_t
 
-            self.v = self.beta_2 * self.v + (1 - self.beta_2) * g_t * g_t
+        self.v = self.beta_2 * self.v + (1 - self.beta_2) * g_t * g_t
 
-            theta = theta - self.lr * self.m / (self.v ** 0.5 + self.eps)
-            
-        else:
-            raise RuntimeError('nan in gradient')
+        theta = theta - self.lr * self.m / (self.v ** 0.5 + self.eps)
 
         return theta
 
@@ -47,6 +43,7 @@ class ADAM:
 def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='adam',
                      lr=1e-3, batch_size=32, val_size=None, val_skip=0, tol_r=10, plot_tol_r=1,
                      factr=1e-3, max_batch_r=None,
+                     early_stop=True,
                      ref='tmp_mdl',
                      plot_loss=False, print_info=True, plot_final_loss=False, print_iteration=False, print_final_info=True):
 
@@ -77,7 +74,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             val_size = n_data
             val_idx = numpy.arange(0, n_data)
         else:
-            val_idx = numpy.random.choice(numpy.arange(0, n_data), val_size, replace=True)
+            val_idx = numpy.random.choice(numpy.arange(0, n_data), val_size, replace=False)
     else:
         val_size = None
 
@@ -91,11 +88,24 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
     for i in range(0, max_batch):
 
         if batch_size is not None:
-            batch_idx = numpy.random.choice(numpy.arange(0, n_data), batch_size, replace=True)
+            if batch_size >= n_data:
+                batch_size = n_data
+                batch_idx = numpy.arange(0, n_data)
+            else:    
+                batch_idx = numpy.random.choice(numpy.arange(0, n_data), batch_size, replace=False)
 
         L_t, g_t = obj_g(theta, data[batch_idx, :], extra_args)
-
-        theta = optimiser.update(theta, g_t)
+        
+        if numpy.sum(~numpy.isfinite(g_t)) == 0:
+            theta = optimiser.update(theta, g_t)
+        else:
+            print('nan in gradient')
+        
+        if numpy.isfinite(L_t.numpy()):
+            L_t = L_t.numpy()
+        else:
+            print('nan in Loss')
+            L_t = copy.deepcopy(raw_batch_L[-1])
 
         if val_size is not None:
 
@@ -107,10 +117,11 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
                 L_t = copy.deepcopy(raw_batch_L[-1])
 
-        if numpy.isfinite(L_t.numpy()):
-            L_t = L_t.numpy()
-        else:
-            raise RuntimeError('nan in Loss')
+            if numpy.isfinite(L_t.numpy()):
+                L_t = L_t.numpy()
+            else:
+                print('nan in Loss')
+                L_t = copy.deepcopy(raw_batch_L[-1])
         
         if print_iteration:        
             print('Batch: ' + str(i) + ', L_t: ' + str(L_t))
@@ -128,7 +139,8 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
             fig, axlist = matplotlib.pyplot.subplots(nrows=1, ncols=2, dpi=128, figsize=(21, 9))
 
-            axlist[0].plot(numpy.arange(0, len(epoch_L)), numpy.array(epoch_L))
+            axlist[0].plot(numpy.arange(epoch_size, epoch_size+len(epoch_L)), numpy.array(epoch_L), 'b', alpha=1.0)
+            axlist[0].plot(numpy.arange(0, len(raw_batch_L)), numpy.array(raw_batch_L), 'b', alpha=0.1)
 
             axlist[0].set_xlabel('Batches')
 
@@ -138,7 +150,8 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
             axlist[0].grid(True)
         
-            axlist[1].plot(numpy.arange(0, len(epoch_L))[-plot_tol:], numpy.array(epoch_L)[-plot_tol:])
+            axlist[1].plot(numpy.arange(epoch_size, epoch_size+len(epoch_L))[-tol:], numpy.array(epoch_L)[-tol:], 'b', alpha=1.0)
+            axlist[1].plot(numpy.arange(0, len(raw_batch_L))[-tol:], numpy.array(raw_batch_L)[-tol:], 'b', alpha=0.1)
 
             axlist[1].set_xlabel('Batches')
 
@@ -173,27 +186,30 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
             gap.append(previous_opt - current_opt)
 
-            if (len(gap) >= 2) & (gap[-1] <= (gap[0] * factr)):
+            if (len(gap) >= 2) & (gap[-1] <= (gap[0] * factr)) & early_stop:
                 break
             
-        if print_info & (len(epoch_L) > 0):
+        if print_info: 
             
             tmp_time = datetime.datetime.now()
             
             if len(epoch_L) <= tol:
             
-                print('\rEpoch: ' + str(int(len(epoch_L) / epoch_size)) + ', Optimiser: ' + optimiser_choice + ', Loss: ' + str(epoch_L[-1]) + 
-                    ', Progress:' + "{:.2f}".format(len(raw_batch_L) / max_batch * 100) + '%' + 
-                    ', Running Time: ' + str(((tmp_time - start_time))) + 
-                    ', Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1)), end='')
+                print('\rEpoch: ' + str(int(len(epoch_L) / epoch_size)) + ', Optimiser: ' + optimiser_choice + ', Loss: ' + str(raw_batch_L[-1]) + 
+                      ', Progress:' + "{:.2f}".format(len(raw_batch_L) / max_batch * 100) + '%' + 
+                     ', Running Time: ' + str(((tmp_time - start_time))) + 
+                      ', Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1)), end='')
+
             else:
-                print('\rEpoch: ' + str(int(len(epoch_L) / epoch_size)) + ', Optimiser: ' + optimiser_choice + ', Loss: ' + str(epoch_L[-1]) + 
-                    ', Progress:' + "{:.2f}".format(len(raw_batch_L) / max_batch * 100) + '%' + 
-                    ', Previous Avg.Loss:' + str(previous_opt) +
-                    ', Current Avg.Loss:' + str(current_opt) +
-                    ', Improvement: ' + str(gap[-1]) + ', Threshold: ', str(gap[0] * factr) +
-                    ', Running Time: ' + str(((tmp_time - start_time))) + 
-                    ', Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1)), end='')       
+                
+                print('\rEpoch: ' + str(int(len(epoch_L) / epoch_size)) + ', Optimiser: ' + optimiser_choice + ', Loss: ' + str(raw_batch_L[-1]) + 
+                      ', Progress:' + "{:.2f}".format(len(raw_batch_L) / max_batch * 100) + '%' + 
+                      ', Previous Avg.Loss:' + str(previous_opt) +
+                      ', Current Avg.Loss:' + str(current_opt) +
+                      ', Improvement: ' + str(gap[-1]) + ', Threshold: ', str(gap[0] * factr) +
+                      ', Running Time: ' + str(((tmp_time - start_time))) + 
+                      ', Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1)), end='')                  
+                 
             
     if print_final_info:
         print('\nTotal epoch number: ' + str(int((len(epoch_L) / epoch_size))))
@@ -206,7 +222,8 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
         fig, axlist = matplotlib.pyplot.subplots(nrows=1, ncols=2, dpi=128, figsize=(21, 9))
         
-        axlist[0].plot(numpy.arange(0, len(epoch_L)), numpy.array(epoch_L))
+        axlist[0].plot(numpy.arange(epoch_size, epoch_size+len(epoch_L)), numpy.array(epoch_L), 'b', alpha=1.0)
+        axlist[0].plot(numpy.arange(0, len(raw_batch_L)), numpy.array(raw_batch_L), 'b', alpha=0.1)
 
         axlist[0].set_xlabel('Batches')
 
@@ -216,7 +233,8 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
         axlist[0].grid(True)
         
-        axlist[1].plot(numpy.arange(0, len(epoch_L))[-tol:], numpy.array(epoch_L)[-tol:])
+        axlist[1].plot(numpy.arange(epoch_size, epoch_size+len(epoch_L))[-tol:], numpy.array(epoch_L)[-tol:], 'b', alpha=1.0)
+        axlist[1].plot(numpy.arange(0, len(raw_batch_L))[-tol:], numpy.array(raw_batch_L)[-tol:], 'b', alpha=0.1)
 
         axlist[1].set_xlabel('Batches')
 
@@ -233,7 +251,5 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             pass
         except OSError:
             pass
-
-        matplotlib.pyplot.close(fig)
 
     return fin_theta
