@@ -8,9 +8,13 @@ import matplotlib
 
 matplotlib.use('Agg')
 
+matplotlib.rcParams['agg.path.chunksize'] = int(1e16)
+
 import matplotlib.pyplot
 
 import datetime
+
+numpy.set_printoptions(precision=2)
 
 
 class ADAM:
@@ -99,13 +103,12 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
         if numpy.sum(~numpy.isfinite(g_t)) == 0:
             theta = optimiser.update(theta, g_t)
         else:
-            print('nan in gradient')
+            raise RuntimeError('nan in gradient')
         
         if numpy.isfinite(L_t.numpy()):
             L_t = L_t.numpy()
         else:
-            print('nan in Loss')
-            L_t = copy.deepcopy(raw_batch_L[-1])
+            raise RuntimeError('nan in Loss')
 
         if val_size is not None:
 
@@ -120,8 +123,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             if numpy.isfinite(L_t.numpy()):
                 L_t = L_t.numpy()
             else:
-                print('nan in Loss')
-                L_t = copy.deepcopy(raw_batch_L[-1])
+                raise RuntimeError('nan in Loss')
         
         if print_iteration:        
             print('Batch: ' + str(i) + ', L_t: ' + str(L_t))
@@ -130,17 +132,20 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
                 
         if len(raw_batch_L) > epoch_size:
             epoch_L.append(numpy.mean(numpy.array(raw_batch_L)[-epoch_size:]))
-
-        if len(epoch_L) >= 2:
-            if epoch_L[-1] < numpy.min(epoch_L[:-1]):
-                fin_theta = copy.deepcopy(theta)
+        else:
+            epoch_L.append(numpy.mean(numpy.array(raw_batch_L)))
 
         if (numpy.mod(len(epoch_L), plot_tol) == 0) & plot_loss & (len(epoch_L) >= plot_tol):
 
             fig, axlist = matplotlib.pyplot.subplots(nrows=1, ncols=2, dpi=128, figsize=(21, 9))
 
-            axlist[0].plot(numpy.arange(epoch_size, epoch_size+len(epoch_L)), numpy.array(epoch_L), 'b', alpha=1.0)
-            axlist[0].plot(numpy.arange(0, len(raw_batch_L)), numpy.array(raw_batch_L), 'b', alpha=0.1)
+            axlist[0].plot(numpy.arange(len(epoch_L)), numpy.array(epoch_L), 'b', alpha=1.0)
+            axlist[0].plot(numpy.arange(len(raw_batch_L)), numpy.array(raw_batch_L), 'b', alpha=0.1)
+            
+            v_max = numpy.percentile(numpy.array(epoch_L), 95)
+            v_min = numpy.min(epoch_L)
+            
+            # axlist[0].set_ylim([v_min - 0.01 * (v_max - v_min), v_max + 0.01 * (v_max - v_min)])
 
             axlist[0].set_xlabel('Batches')
 
@@ -150,8 +155,8 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
             axlist[0].grid(True)
         
-            axlist[1].plot(numpy.arange(epoch_size, epoch_size+len(epoch_L))[-tol:], numpy.array(epoch_L)[-tol:], 'b', alpha=1.0)
-            axlist[1].plot(numpy.arange(0, len(raw_batch_L))[-tol:], numpy.array(raw_batch_L)[-tol:], 'b', alpha=0.1)
+            axlist[1].plot(numpy.arange(len(epoch_L))[-tol:], numpy.array(epoch_L)[-tol:], 'b', alpha=1.0)
+            axlist[1].plot(numpy.arange(len(raw_batch_L))[-tol:], numpy.array(raw_batch_L)[-tol:], 'b', alpha=0.1)
 
             axlist[1].set_xlabel('Batches')
 
@@ -179,51 +184,61 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
             except OSError:
                 pass
             
-        if len(epoch_L) > tol:
-            previous_opt = numpy.min(epoch_L.copy()[:-tol])
+        if len(epoch_L) > (2 * tol):
+            previous_opt = numpy.mean(epoch_L.copy()[-2*tol:-tol])
 
-            current_opt = numpy.min(epoch_L.copy()[-tol:])
+            current_opt = numpy.mean(epoch_L.copy()[-tol:])
 
             gap.append(previous_opt - current_opt)
-
-            if (len(gap) >= 2) & (gap[-1] <= (gap[0] * factr)) & early_stop:
-                break
+            
+            if current_opt < previous_opt:
+                fin_theta = copy.deepcopy(theta)
+                
+            if len(gap) >= 3:
+                if (gap[-1] < numpy.clip(gap[-2] * factr, 0.0, None)) & early_stop:
+                    break
             
         if print_info: 
             
             tmp_time = datetime.datetime.now()
             
-            if len(epoch_L) <= tol:
-            
-                print('\rEpoch: ' + str(int(len(epoch_L) / epoch_size)) + ', Optimiser: ' + optimiser_choice + ', Loss: ' + str(raw_batch_L[-1]) + 
+            if len(epoch_L) <= (3 * tol):
+                print('\rEpoch: ' + str(int(len(epoch_L) / epoch_size)) + ', Optimiser: ' + optimiser_choice + 
+                      ', Loss: ' + "{:.6f}".format(epoch_L[-1]) + 
                       ', Progress:' + "{:.2f}".format(len(raw_batch_L) / max_batch * 100) + '%' + 
-                     ', Running Time: ' + str(((tmp_time - start_time))) + 
-                      ', Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1)), end='')
+                     ', Running Time: ' + str(((tmp_time - start_time)))[:7] + 
+                      ', Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1))[:7], end='')
 
             else:
-                
-                print('\rEpoch: ' + str(int(len(epoch_L) / epoch_size)) + ', Optimiser: ' + optimiser_choice + ', Loss: ' + str(raw_batch_L[-1]) + 
+                print('\rEpoch: ' + str(int(len(epoch_L) / epoch_size)) + ', Optimiser: ' + optimiser_choice + 
+                      ', Loss: ' + "{:.6f}".format(epoch_L[-1]) + 
                       ', Progress:' + "{:.2f}".format(len(raw_batch_L) / max_batch * 100) + '%' + 
-                      ', Previous Avg.Loss:' + str(previous_opt) +
-                      ', Current Avg.Loss:' + str(current_opt) +
-                      ', Improvement: ' + str(gap[-1]) + ', Threshold: ', str(gap[0] * factr) +
-                      ', Running Time: ' + str(((tmp_time - start_time))) + 
-                      ', Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1)), end='')                  
+                      ', Previous Avg.Loss:' + "{:.6f}".format(previous_opt) +
+                      ', Current Avg.Loss:' + "{:.6f}".format(current_opt) +
+                      ', Improvement: ' + "{:.6f}".format(gap[-1]) + 
+                      ', Threshold: ', "{:.6f}".format(numpy.clip(gap[-2] * factr, 0.0, None) ) +
+                      ', Running Time: ' + str(((tmp_time - start_time)))[:7] + 
+                      ', Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1))[:7], end='')                  
                  
             
     if print_final_info:
         print('\nTotal epoch number: ' + str(int((len(epoch_L) / epoch_size))))
         print('Initial Loss: ' + str(epoch_L[0]))
-        print('Final Loss: ' + str(numpy.min(epoch_L)))
-        print('Current Improvement, Initial Improvement * factr')
-        print(numpy.hstack([gap[-1], gap[0] * factr]))
+        print('Final Loss: ' + str(numpy.mean(epoch_L.copy()[-tol:])))
+        print('Current Improvement, Previous Improvement * factr')
+        print(numpy.hstack([gap[-1], numpy.clip(gap[-2] * factr, 0.0, None)]))
 
     if plot_final_loss:
 
         fig, axlist = matplotlib.pyplot.subplots(nrows=1, ncols=2, dpi=128, figsize=(21, 9))
         
-        axlist[0].plot(numpy.arange(epoch_size, epoch_size+len(epoch_L)), numpy.array(epoch_L), 'b', alpha=1.0)
-        axlist[0].plot(numpy.arange(0, len(raw_batch_L)), numpy.array(raw_batch_L), 'b', alpha=0.1)
+        axlist[0].plot(numpy.arange(len(epoch_L)), numpy.array(epoch_L), 'b', alpha=1.0)
+        axlist[0].plot(numpy.arange(len(raw_batch_L)), numpy.array(raw_batch_L), 'b', alpha=0.1)
+            
+        v_max = numpy.percentile(numpy.array(epoch_L), 95)
+        v_min = numpy.min(epoch_L)
+            
+        # axlist[0].set_ylim([v_min - 0.01 * (v_max - v_min), v_max + 0.01 * (v_max - v_min)])
 
         axlist[0].set_xlabel('Batches')
 
@@ -233,8 +248,8 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
         axlist[0].grid(True)
         
-        axlist[1].plot(numpy.arange(epoch_size, epoch_size+len(epoch_L))[-tol:], numpy.array(epoch_L)[-tol:], 'b', alpha=1.0)
-        axlist[1].plot(numpy.arange(0, len(raw_batch_L))[-tol:], numpy.array(raw_batch_L)[-tol:], 'b', alpha=0.1)
+        axlist[1].plot(numpy.arange(len(epoch_L))[-tol:], numpy.array(epoch_L)[-tol:], 'b', alpha=1.0)
+        axlist[1].plot(numpy.arange(len(raw_batch_L))[-tol:], numpy.array(raw_batch_L)[-tol:], 'b', alpha=0.1)
 
         axlist[1].set_xlabel('Batches')
 
@@ -243,13 +258,8 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
         axlist[1].set_title('Learning Rate: ' + str(lr))
 
         axlist[1].grid(True)
-
-        try:
-            fig.savefig('./' + ref + str(lr) + '_' + str(numpy.shape(data)[0]) + '_' 
-                        + str(start_time).replace(':', '-') + '.png', bbox_inches='tight')
-        except PermissionError:
-            pass
-        except OSError:
-            pass
+        
+    # if not early_stop:
+    #     fin_theta = copy.deepcopy(theta)
 
     return fin_theta
