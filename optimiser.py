@@ -141,9 +141,9 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
         raw_batch_L.append(L_t)
                 
         if len(raw_batch_L) > epoch_size:
-            epoch_L.append(numpy.mean(numpy.array(raw_batch_L)[-epoch_size:]))
+            epoch_L.append(numpy.median(numpy.array(raw_batch_L)[-epoch_size:]))
         else:
-            epoch_L.append(numpy.mean(numpy.array(raw_batch_L)))
+            epoch_L.append(numpy.median(numpy.array(raw_batch_L)))
 
         if (numpy.mod(len(epoch_L), plot_tol) == 0) & plot_loss & (len(epoch_L) >= plot_tol):
 
