@@ -1,16 +1,13 @@
-from typing_extensions import runtime
-
-import numpy
-
 import copy
 
 import matplotlib
+import numpy
 
 matplotlib.use('Agg')
 
-import matplotlib.pyplot
-
 import datetime
+
+import matplotlib.pyplot
 
 numpy.set_printoptions(precision=2)
 
@@ -80,9 +77,13 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
     if val_size is not None:
         if val_size >= n_data:
             val_size = n_data
-            val_idx = numpy.arange(0, n_data)
+            val_data = data
         else:
-            val_idx = numpy.random.choice(numpy.arange(0, n_data), val_size, replace=True)
+            idx = numpy.random.permutation(n_data)
+            data = data[idx, :]
+            val_data = data[-val_size:, :]
+            data = data[:-val_size, :]
+            n_data = numpy.shape(data)[0]
     else:
         val_size = None
 
@@ -122,7 +123,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
 
             if numpy.mod(i, numpy.min([numpy.floor(tol / 2), (1 + val_skip)])) == 0:
 
-                L_t = obj(theta,  data[val_idx, :], extra_args)
+                L_t = obj(theta,  val_data, extra_args)
 
             else:
 
@@ -132,7 +133,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
                 L_t = L_t
             else:
                 joblib.dump(theta, './nan_theta.pkl')
-                joblib.dump(data[val_idx, :], './nan_data.pkl')
+                joblib.dump(val_data, './nan_data.pkl')
                 raise RuntimeError('nan in Loss')
         
         if print_iteration:        
@@ -195,9 +196,9 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
                 pass
             
         if len(epoch_L) > (2 * tol):
-            previous_opt = numpy.mean(epoch_L.copy()[-2*tol:-tol])
+            previous_opt = numpy.min(epoch_L.copy()[:-tol])
 
-            current_opt = numpy.mean(epoch_L.copy()[-tol:])
+            current_opt = numpy.min(epoch_L.copy()[-tol:])
 
             gap.append(previous_opt - current_opt)
             
@@ -219,7 +220,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
                       ', Progress:' + "{:.2f}".format(len(raw_batch_L) / max_batch * 100) + '%' + 
                      ', Running Time: ' + str(((tmp_time - start_time)))[:7] + 
                       ', Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1))[:7], 
-                      end='\r')
+                      end='')
 
             else:
                 stdout.flush()
@@ -232,7 +233,7 @@ def parameter_update(theta_0, data, extra_args, obj, obj_g, optimiser_choice='ad
                       ', Threshold: ', "{:.6f}".format(numpy.clip(gap[-2] * factr, 0.0, None) ) +
                       ', Running Time: ' + str(((tmp_time - start_time)))[:7] + 
                       ', Remaining Time: ' + str((tmp_time - start_time) * (max_batch / len(raw_batch_L) - 1))[:7], 
-                      end='\r')               
+                      end='')               
                  
             
     if print_final_info:
